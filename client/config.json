@@ -1,0 +1,82 @@
+{
+    "ip_servidor_central": "164.41.98.15",
+    "porta_servidor_central": 10510,
+    "ip_servidor_distribuido": "127.0.0.1",
+    "porta_servidor_distribuido": 10502,
+    "nome": "room_1",
+    "dispositivos":{
+      "presence_sensor": {
+          "type": "input",
+          "name": "Sensor de Presença",
+          "tag": "presence_sensor",
+          "gpio": 7
+      },
+      "smoke_sensor":{
+          "type": "input",
+          "name": "Sensor de Fumaça",
+          "tag": "smoke_sensor",
+          "gpio": 1
+      },
+      "window_sensor":{
+          "type": "input",
+          "name": "Sensor de Janela",
+          "tag": "window_sensor",
+          "gpio": 12
+      },
+      "door_sensor":{
+          "type": "input",
+          "name": "Sensor de Porta",
+          "tag": "door_sensor",
+          "gpio": 16
+      },
+      "people_counting_sensor_entry":{
+          "type": "input",
+          "name": "Sensor de Contagem de Pessoas Entrada",
+          "tag": "people_counting_sensor_entry",
+          "gpio": 20
+      },
+      "people_counting_sensor_exit":{
+          "type": "input",
+          "name": "Sensor de Contagem de Pessoas Saída",
+          "tag": "people_counting_sensor_exit",
+          "gpio": 21
+      },
+      "lamp1":{
+          "type": "output",
+          "name": "Lampada 1",
+          "tag": "lamp1",
+          "gpio": 18
+      },
+      "lamp2":{
+          "type": "output",
+          "name": "Lampada 2",
+          "tag": "lamp2",
+          "gpio": 23
+      },
+      "multimedia_projector":{
+          "type": "output",
+          "name": "Projetor Multimidia",
+          "tag": "multimedia_projector",
+          "gpio": 25
+      },
+      "air_conditioner":{
+          "type": "output",
+          "name": "Ar-Condicionado",
+          "tag": "air_conditioner",
+          "gpio": 24
+      },
+      "alarm_bell":{
+          "type": "output",
+          "name": "Sirene do Alarme",
+          "tag": "alarm_bell",
+          "gpio": 8
+      },
+      "temperature_humidity_sensor":{
+          "type": "dth22",
+          "name": "Sensor de Temperatura e Umidade",
+          "tag": "temperature_humidity_sensor",
+          "gpio": 4
+      }
+  }
+  }
+  
