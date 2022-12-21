@@ -342,75 +342,81 @@ class CentralServer:
         self.pad_instructions.clear()
         self.pad_instructions_position = (0, cols_mid, rows_mid * 2, width - 1)
         self.pad_instructions.border("|", "|", "-", "-", "+", "+", "+", "+")
-        self.pad_instructions.addstr(
-            1,
-            1,
-            "Instructions: Write the number of the room and the number of the device to turn on/off",
-            curses.A_BOLD,
-        )
         rows, cols = self.pad_instructions.getmaxyx()
-        self.pad_instructions.addstr(2, 1, "-" * (cols - 2))
-        self.pad_instructions.addstr(3, 1, "1 - Turn on/off lamp1")
-        self.pad_instructions.addstr(4, 1, "2 - Turn on/off lamp2")
-        self.pad_instructions.addstr(5, 1, "3 - Turn on/off  Air conditioner")
-        self.pad_instructions.addstr(
-            6, 1, "4 - Turn on/off  Multimedia Projector"
-        )
-        self.pad_instructions.addstr(7, 1, "5 - Turn on all lamps")
-
-        self.pad_instructions.addstr(3, cols_mid + 1, "6 - Turn off all lamps")
-        self.pad_instructions.addstr(
-            4, cols_mid + 1, "7 - Turn on all devices"
-        )
-        self.pad_instructions.addstr(
-            5, cols_mid + 1, "8 - Turn off all devices"
-        )
-        self.pad_instructions.addstr(
-            6, cols_mid + 1, "9 - Turn on/off systen alarm"
-        )
-        self.pad_instructions.addstr(
-            7, cols_mid + 1, "10 - Turn on/off buzzer alarm"
-        )
-
-        # Notes
-        rooms = self.get_rooms_conneteds()
-        if rooms:
-            if len(rooms) > 1:
-                number_of_roomns = "{} and {}".format(
-                    ", ".join(str(x) for x in rooms[:-1]), rooms[-1]
-                )
-            else:
-                number_of_roomns = rooms[0]
-            note = f"Note 1: You can turn on/off the devices of the room {number_of_roomns}"
-            self.pad_instructions.addstr(11, 1, note, curses.A_BOLD)
-        else:
-            note = "Note 1: There are no rooms connected"
+        if cols > 100:
             self.pad_instructions.addstr(
-                11, 1, note, curses.A_BOLD | curses.A_BLINK
+                1,
+                1,
+                "Instructions: Write the number of the room and the number of the device to turn on/off",
+                curses.A_BOLD,
+            )
+        else:
+            self.pad_instructions.addstr(
+                1,
+                1,
+                "Instructions:",
+                curses.A_BOLD,
+            )
+        self.pad_instructions.addstr(2, 1, "-" * (cols - 2))
+        self.pad_instructions.addstr(3, 1, "1- Turn on/off lamp1")
+        self.pad_instructions.addstr(4, 1, "2- Turn on/off lamp2")
+        self.pad_instructions.addstr(5, 1, "3- Turn on/off Air conditioner")
+        self.pad_instructions.addstr(
+            6, 1, "4- Turn on/off Multimedia Projector"
+        )
+        self.pad_instructions.addstr(7, 1, "5- Turn on all lamps")
+
+        self.pad_instructions.addstr(3, cols_mid + 1, "6- Turn off all lamps")
+        self.pad_instructions.addstr(4, cols_mid + 1, "7- Turn on all devices")
+        self.pad_instructions.addstr(
+            5, cols_mid + 1, "8- Turn off all devices"
+        )
+        self.pad_instructions.addstr(
+            6, cols_mid + 1, "9- Turn on/off systen alarm"
+        )
+        self.pad_instructions.addstr(
+            7, cols_mid + 1, "10- Turn on/off buzzer alarm"
+        )
+        if cols > 100:
+            # Notes
+            rooms = self.get_rooms_conneteds()
+            if rooms:
+                if len(rooms) > 1:
+                    number_of_roomns = "{} and {}".format(
+                        ", ".join(str(x) for x in rooms[:-1]), rooms[-1]
+                    )
+                else:
+                    number_of_roomns = rooms[0]
+                note = f"Note 1: You can turn on/off the devices of the room {number_of_roomns}"
+                self.pad_instructions.addstr(11, 1, note, curses.A_BOLD)
+            else:
+                note = "Note 1: There are no rooms connected"
+                self.pad_instructions.addstr(
+                    11, 1, note, curses.A_BOLD | curses.A_BLINK
+                )
+
+            self.pad_instructions.addstr(
+                12,
+                1,
+                "Note 2: All devices is [lamp1, lamp2, air conditioner, multimedia projector]",
+                curses.A_BOLD,
+            )
+            self.pad_instructions.addstr(
+                13,
+                1,
+                "Note 3: To apply a command to all rooms, write the number 0",
+                curses.A_BOLD,
+            )
+            self.pad_instructions.addstr(
+                14,
+                1,
+                "Note 4: To send a command to all devices, just write the number of action",
+                curses.A_BOLD,
             )
 
-        self.pad_instructions.addstr(
-            12,
-            1,
-            "Note 2: All devices is [lamp1, lamp2, air conditioner, multimedia projector]",
-            curses.A_BOLD,
-        )
-        self.pad_instructions.addstr(
-            13,
-            1,
-            "Note 3: To apply a command to all rooms, write the number 0",
-            curses.A_BOLD,
-        )
-        self.pad_instructions.addstr(
-            14,
-            1,
-            "Note 4: To send a command to all devices, just write the number of action",
-            curses.A_BOLD,
-        )
-
-        self.pad_instructions.addstr(
-            9, cols_mid + 1, "Examples: 1 1", curses.A_REVERSE
-        )
+            self.pad_instructions.addstr(
+                9, cols_mid + 1, "Examples: 1 1", curses.A_REVERSE
+            )
 
         self.pad_instructions.refresh(0, 0, *self.pad_instructions_position)
         globals.stdscr_global.noutrefresh()
