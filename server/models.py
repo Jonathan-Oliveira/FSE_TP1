@@ -5,6 +5,8 @@ import threading
 import time
 from datetime import datetime
 from multiprocessing import Queue
+from curses.textpad import Textbox
+from utils import commands_user
 
 import globals
 
@@ -58,12 +60,11 @@ class Room:
         self,
         name,
         address,
-        number,
         connection,
         **kwargs,
     ):
         self.name = name
-        self.number = number
+        self.number = int(name.split("_")[1])
         self.address = f"{address[0]}:{address[1]}"
         self.pad = self.creat_new_pad()
         self.connected = True
@@ -100,7 +101,8 @@ class Room:
     def show_in_screen(self):
         self.pad.clear()
         rows, cols = self.pad.getmaxyx()
-        message = f"Room {self.number} - Addres {self.address}"
+        number = self.name.split("_")[1]
+        message = f"Room {number} - Address {self.address}"
         self.pad.addstr(1, int(cols / 2) - int(len(message) / 2), message)
         self.pad.addstr(2, 0, "-" * cols)
         # Get all devices messages
@@ -135,76 +137,20 @@ class Room:
         globals.stdscr_global.noutrefresh()
         curses.doupdate()
 
-    def turn_all_lamp_off(self):
-        for key, value in self.__dict__.items():
-            if isinstance(value, Device) and value.tag.startswith("lamp"):
-                value.turn_off()
-
-    def turn_all_lamp_on(self):
-        for key, value in self.__dict__.items():
-            if isinstance(value, Device) and value.tag.startswith("lamp"):
-                value.turn_on()
-
-    def apply_action(self, command):
-        data = {}
-        if command == 1:
-            data = (
-                {"lamp1": "on"}
-                if self.lamp1.get_value() == 0
-                else {"lamp1": "of"}
-            )
-        elif command == 2:
-            data = (
-                {"lamp2": "on"}
-                if self.lamp2.get_value() == 0
-                else {"lamp2": "of"}
-            )
-        elif command == 3:
-            data = (
-                {"air_conditioner": "on"}
-                if self.air_conditioner.get_value() == 0
-                else {"air_conditioner": "of"}
-            )
-        elif command == 4:
-            data = (
-                {"multimedia_projector": "on"}
-                if self.multimedia_projector.get_value() == 0
-                else {"multimedia_projector": "of"}
-            )
-        elif command == 5:
-            data = {"lamp1": "on", "lamp2": "on"}
-        elif command == 6:
-            data = {"lamp1": "of", "lamp2": "of"}
-        elif command == 7:
+    def apply_action(self, action=None):
+        if type(action) == dict:
+            data = action
+        else:
             data = {
-                "air_conditioner": "on",
-                "multimedia_projector": "on",
-                "lamp1": "on",
-                "lamp2": "on",
+                action: "on"
+                if self.__dict__[action].get_value() == 0
+                else "of"
             }
-        elif command == 8:
-            data = {
-                "air_conditioner": "of",
-                "multimedia_projector": "of",
-                "lamp1": "of",
-                "lamp2": "of",
-            }
-        elif command == 9:
-            data = {"allarm_bell": "on"}
-        elif command == 10:
-            data = {"allarm_bell": "of"}
-        elif command == 11:
-            data = {"alarm_system": "on"}
-        elif command == 12:
-            data = {"alarm_system": "of"}
-
         response = self.send_command(data)
 
         if response.get("status") == "accepted":
             body = response.get("data")
             for key, value in body.items():
-                if key == "alarm_system":
-                    continue
                 self.__dict__[key].set_value(value)
             self.show_in_screen()
             return True, data, response.get("message")
@@ -216,8 +162,6 @@ class Room:
         thread.start()
         thread2 = threading.Thread(target=self.apply_client_updates)
         thread2.start()
-        # thread.join()
-        # thread2.join()
 
     def lister_client(self):
         try:
@@ -225,9 +169,11 @@ class Room:
                 bytes(json.dumps(["Connected with the server"]), "utf-8")
             )
             while True:
+                if globals.stop_threads:
+                    break
                 data = self.connection.recv(2048)
                 if not data:
-                    time.sleep(0.3)
+                    time.sleep(0.4)
                 data = json.loads(data.decode("utf-8"))
                 if data.get("type") == "push":
                     self.queueUpdates.put(data.get("data"))
@@ -238,18 +184,19 @@ class Room:
             # self.connected = False
             # self.connection.close()
         except Exception:
-            time.sleep(0.3)
+            time.sleep(0.4)
             # print(f"Erro when listen the client {str(e)}")
 
     def apply_client_updates(self):
         while True:
+            if globals.stop_threads:
+                break
             if not self.queueUpdates.empty():
                 devices_values = self.queueUpdates.get()
                 for key, value in devices_values.items():
                     self.__dict__[key].set_value(value)
                 self.show_in_screen()
-            time.sleep(0.3)
-            # self.queueUpdates.task_done()
+            time.sleep(0.4)
 
     def send_command(self, data):
         if self.connected:
@@ -263,52 +210,23 @@ class Room:
 
 
 class CentralServer:
-    def __init__(self, host, port):
+    def __init__(self, server):
         self.people_count = 0
         self.rooms_conneteds = 0
-        self.system_alarms = 0
-        self.host = host
-        self.port = port
+        self.alarm_system = 0
+        self.server = server
+        self.buzzer = 0
         self.pad_dashboard = None
 
     def add_room(self, room: Room):
-        rooms_config = self.load_rooms_config()
-        if hasattr(room, "address"):
-            if rooms_config.get(room.address):
-                room.name = rooms_config.get(room.address).get("name")
-                room.number = rooms_config.get(room.address).get("number")
-            else:
-                room.number = len(rooms_config) + 1
-                room.name = f"room_{room.number}"
         setattr(self, room.name, room)
         self.__dict__[room.name].run()
-        self.log_rooms_config()
         self.show_dashboard()
         self.show_instructions()
 
-    def load_rooms_config(self):
-        with open("server/rooms_config.json", "r") as file:
-            rooms_config = json.load(file)
-        return rooms_config
-
-    def log_rooms_config(self):
-        rooms_config = {}
-        for key, value in self.__dict__.items():
-            if isinstance(value, Room):
-                rooms_config.update(
-                    {
-                        value.address: {
-                            "name": value.name,
-                            "number": value.number,
-                        }
-                    }
-                )
-        with open("server/rooms_config.json", "w") as file:
-            file.write(json.dumps(rooms_config, indent=4))
-
     def turn_on_off_alarm_system(self):
         command_applyed = {}
-        if self.system_alarms == 0:
+        if self.alarm_system == 0:
             triggers_dont_off = []
             trigger_sensors = [
                 "presence_sensor",
@@ -322,46 +240,26 @@ class CentralServer:
                             triggers_dont_off.append(sensor)
 
             if triggers_dont_off:
-                return False, triggers_dont_off
-            self.system_alarms = 1
+                return False, triggers_dont_off, {"alarm_system": "off"}
+            self.alarm_system = 1
             command_applyed = {"alarm_system": "on"}
         else:
-            self.system_alarms = 0
+            self.alarm_system = 0
             command_applyed = {"alarm_system": "off"}
 
         for key, value in self.__dict__.items():
             if isinstance(value, Room):
-                if value.connected:
-                    value.apply_action(
-                        command=12  # "turn_off_alarm_system"
-                        if self.system_alarms == 0
-                        else 11  # "turn_on_alarm_system"
-                    )
+                value.apply_action(action=command_applyed)
         self.show_dashboard()
         return True, None, command_applyed
 
     def __repr__(self):
         return f"Central({self.__dict__})"
 
-    def show_in_screen(self):
-        for key, value in self.__dict__.items():
-            if isinstance(value, Room):
-                value.show_in_screen()
-
     def refresh(self):
         for key, value in self.__dict__.items():
             if isinstance(value, Room):
                 value.refresh()
-
-    def turn_all_lamp_off(self):
-        for key, value in self.__dict__.items():
-            if isinstance(value, Room):
-                value.turn_all_lamp_off()
-
-    def turn_all_lamp_on(self):
-        for key, value in self.__dict__.items():
-            if isinstance(value, Room):
-                value.turn_all_lamp_on()
 
     def create_screen_feedbacks_system(self):
         height, width, rows_mid, cols_mid = self.get_screen_size()
@@ -377,26 +275,21 @@ class CentralServer:
             width - 1,
         )
 
-    def refresh_pads(self):
-        self.pad_dashboard.refresh(0, 0, *self.pad_dashboard_position)
-        self.pad_instructions.refresh(0, 0, *self.pad_instructions_position)
-        self.pad_feedbacks_system.refresh(
-            0, 0, *self.pad_feedbacks_system_position
-        )
-        # globals.stdscr_global.noutrefresh()
-        # curses.doupdate()
-
     def update_rooms_info(self):
-        self.rooms_conneteds = 0
-        self.people_count = 0
-        for key, value in self.__dict__.items():
-            if isinstance(value, Room):
-                if value.connected:
+        while True:
+            if globals.stop_threads:
+                break
+            self.rooms_conneteds = 0
+            self.people_count = 0
+            for key, value in self.__dict__.items():
+                if isinstance(value, Room):
                     self.rooms_conneteds += 1
-            if hasattr(value, "people_count"):
-                self.people_count += value.__dict__.get(
-                    "people_count"
-                ).get_value()
+                    if hasattr(value, "people_count"):
+                        self.people_count += value.__dict__.get(
+                            "people_count"
+                        ).get_value()
+            self.show_dashboard()
+            time.sleep(0.4)
 
     def get_screen_size(self):
         height, width = globals.stdscr_global.getmaxyx()
@@ -411,27 +304,37 @@ class CentralServer:
         self.pad_dashboard.clear()
         self.pad_dashboard_position = (0, 0, rows_mid, cols_mid)
         self.pad_dashboard.border("|", "|", "-", "-", "+", "+", "+", "+")
-        self.pad_dashboard.addstr(1, 1, "Dashboard", curses.A_BOLD)
+        self.pad_dashboard.addstr(1, 1, "System Dashboard", curses.A_BOLD)
         rows, cols = self.pad_dashboard.getmaxyx()
         self.pad_dashboard.addstr(2, 1, "-" * (cols - 2))
-        self.update_rooms_info()
         self.pad_dashboard.addstr(
-            3, 1, f"Rooms connected : {self.rooms_conneteds}"
+            3, 1, f"Rooms connected: {self.rooms_conneteds}"
         )
         self.pad_dashboard.addstr(
-            4, 1, f"Number of people : {self.people_count}"
+            4, 1, f"Number of people: {self.people_count}"
         )
         self.pad_dashboard.addstr(
-            5, 1, f"Alarm system : {'ON' if self.system_alarms else 'OFF'}"
+            5, 1, f"Buzzer: {'ON' if self.buzzer else 'OFF'}"
+        )
+        self.pad_dashboard.addstr(
+            6, 1, f"Alarm system: {'ON' if self.alarm_system else 'OFF'}"
         )
         self.show_rooms()
         self.pad_dashboard.refresh(0, 0, *self.pad_dashboard_position)
+        globals.stdscr_global.noutrefresh()
+        curses.doupdate()
 
     def show_rooms(self):
-        # pass by to all attributes of the class room and call the method show_in_screen
         for key, value in self.__dict__.items():
             if isinstance(value, Room):
                 value.show_in_screen()
+
+    def get_rooms_conneteds(self):
+        return [
+            key.split("_")[1]
+            for key, value in self.__dict__.items()
+            if isinstance(value, Room)
+        ]
 
     def show_instructions(self):
         height, width, rows_mid, cols_mid = self.get_screen_size()
@@ -454,12 +357,24 @@ class CentralServer:
             6, 1, "4 - Turn on/off  Multimedia Projector"
         )
         self.pad_instructions.addstr(7, 1, "5 - Turn on all lamps")
-        self.pad_instructions.addstr(8, 1, "6 - Turn off all lamps")
-        self.pad_instructions.addstr(9, 1, "7 - Turn on all devices")
-        self.pad_instructions.addstr(10, 1, "8 - Turn off all devices")
 
-        if self.rooms_conneteds > 0:
-            rooms = list(range(1, self.rooms_conneteds + 1))
+        self.pad_instructions.addstr(3, cols_mid + 1, "6 - Turn off all lamps")
+        self.pad_instructions.addstr(
+            4, cols_mid + 1, "7 - Turn on all devices"
+        )
+        self.pad_instructions.addstr(
+            5, cols_mid + 1, "8 - Turn off all devices"
+        )
+        self.pad_instructions.addstr(
+            6, cols_mid + 1, "9 - Turn on/off systen alarm"
+        )
+        self.pad_instructions.addstr(
+            7, cols_mid + 1, "10 - Turn on/off buzzer alarm"
+        )
+
+        # Notes
+        rooms = self.get_rooms_conneteds()
+        if rooms:
             if len(rooms) > 1:
                 number_of_roomns = "{} and {}".format(
                     ", ".join(str(x) for x in rooms[:-1]), rooms[-1]
@@ -467,49 +382,44 @@ class CentralServer:
             else:
                 number_of_roomns = rooms[0]
             note = f"Note 1: You can turn on/off the devices of the room {number_of_roomns}"
-            self.pad_instructions.addstr(13, 1, note, curses.A_BOLD)
+            self.pad_instructions.addstr(11, 1, note, curses.A_BOLD)
         else:
             note = "Note 1: There are no rooms connected"
             self.pad_instructions.addstr(
-                13, 1, note, curses.A_BOLD | curses.A_BLINK
+                11, 1, note, curses.A_BOLD | curses.A_BLINK
             )
 
         self.pad_instructions.addstr(
-            14,
+            12,
             1,
             "Note 2: All devices is [lamp1, lamp2, air conditioner, multimedia projector]",
             curses.A_BOLD,
         )
         self.pad_instructions.addstr(
-            15,
+            13,
             1,
             "Note 3: To apply a command to all rooms, write the number 0",
             curses.A_BOLD,
         )
-        # collum 2
         self.pad_instructions.addstr(
-            4, cols_mid + 1, "9 - Turn on/off systen alarm"
-        )
-        self.pad_instructions.addstr(
-            5, cols_mid + 1, "10 - Turn on buzzer alarm"
-        )
-        self.pad_instructions.addstr(
-            6, cols_mid + 1, "11 - Turn of buzzer alarm"
-        )
-        self.pad_instructions.addstr(
-            8,
-            cols_mid + 1,
-            "Note 4: To turn on/off the system alarm, write 9",
+            14,
+            1,
+            "Note 4: To send a command to all devices, just write the number of action",
             curses.A_BOLD,
         )
+
         self.pad_instructions.addstr(
-            10, cols_mid + 1, "Examples: 1 1", curses.A_REVERSE
+            9, cols_mid + 1, "Examples: 1 1", curses.A_REVERSE
         )
 
         self.pad_instructions.refresh(0, 0, *self.pad_instructions_position)
+        globals.stdscr_global.noutrefresh()
+        curses.doupdate()
 
     def show_text_box(self):
         while True:
+            if globals.stop_threads:
+                break
             height, width, rows_mid, cols_mid = self.get_screen_size()
             nlines = int(rows_mid / 2)
             ncols = cols_mid
@@ -523,70 +433,92 @@ class CentralServer:
             win.refresh()
             sub = win.derwin(1, ncols - 2, 3, 1)
             sub.clear()
-            self.box = curses.textpad.Textbox(sub, insert_mode=True)
+            self.box = Textbox(sub, insert_mode=True)
             self.box.edit(enter_is_terminate)
             command = self.box.gather()
             if self.valid_inputs(command):
                 self.apply_command(command)
-            # globals.stdscr_global.noutrefresh()
-            # curses.doupdate()
-            globals.stdscr_global.refresh()
+            globals.stdscr_global.noutrefresh()
+            curses.doupdate()
+            time.sleep(0.4)
 
-            time.sleep(0.3)
+    def parse_user_input(self, user_input):
+        user_input = user_input.strip().split()
+        if len(user_input) == 2:
+            room = int(user_input[0])
+            device = int(user_input[1])
+            return room, commands_user.get(device), device
+        if len(user_input) == 1:
+            device = int(user_input[0])
+            return 0, commands_user.get(device), device
 
     def apply_command(self, command):
-        command = command.strip().split()
-
-        if len(command) == 1:
-            action = int(command[0])
-            if action == 9:
+        room, action, id_command = self.parse_user_input(command)
+        if room == 0:
+            if id_command == 9:
                 (
                     status,
                     message,
                     command_applyed,
                 ) = self.turn_on_off_alarm_system()
-                self.log_command(
-                    {
-                        "local": 0,
-                        "action": command_applyed,
-                    }
-                )
+
                 if status:
                     self.show_feedbacks_system(
                         ["Command applied successfully"]
                     )
                 else:
-                    message_devices = "{} and {}".format(
-                        ", ".join(str(x) for x in message[:-1]), message[-1]
+                    if len(message) == 1:
+                        message_devices = message[0]
+                    else:
+                        message_devices = "{} and {}".format(
+                            ", ".join(str(x) for x in message[:-1]),
+                            message[-1],
+                        )
+                    self.log_command(
+                        {
+                            "local": 0,
+                            "action": command_applyed,
+                        }
                     )
                     self.show_feedbacks_system(
                         [
                             "Command not applied,"
-                            f"The devices {message_devices} are on",
-                            " and the alarm system can't be turned on",
+                            f"The devices {message_devices} ",
+                            "are on and the alarm system",
+                            " can't be turned on",
                         ]
                     )
-        elif len(command) == 2:
-            room = int(command[0])
-            action = int(command[0])
-
-            if room == 0:
-                for num_room in range(1, self.rooms_conneteds + 1):
-                    self.__dict__[f"room_{num_room}"].apply_action(action)
-            else:
-                accept, command_applyed, message = self.__dict__[
-                    f"room_{room}"
-                ].apply_action(int(action))
-                messages = ["Valid command, applying..."]
-                messages.append(message)
-                self.show_feedbacks_system(messages)
-                if accept:
-                    self.log_command(
-                        {
-                            "local": room,
-                            "action": command_applyed,
-                        }
+            elif id_command == 10:
+                if self.turn_on_off_buzzer():
+                    self.show_feedbacks_system(
+                        ["Command applied successfully"]
                     )
+                else:
+                    self.show_feedbacks_system(
+                        [
+                            "Command not applied",
+                        ]
+                    )
+            else:
+                for num_room in self.get_rooms_conneteds():
+                    self.__dict__[f"room_{num_room}"].apply_action(
+                        action=action
+                    )
+                self.log_command({"local": 0, "action": action})
+        else:
+            accept, command_applyed, message = self.__dict__[
+                f"room_{room}"
+            ].apply_action(action=action)
+            messages = ["Valid command, applying..."]
+            messages.append(message)
+            self.show_feedbacks_system(messages)
+            if accept:
+                self.log_command(
+                    {
+                        "local": room,
+                        "action": command_applyed,
+                    }
+                )
 
     def log_command(self, log_command):
         local = log_command.get("local")
@@ -604,9 +536,10 @@ class CentralServer:
     def valid_inputs(self, command):
         command = command.strip().split()
         try:
-            if len(command) == 1 and int(command[0]) in [9, 10]:
+            if len(command) == 1 and int(command[0]) in range(1, 11):
                 return True
             elif len(command) == 1:
+                self.show_feedbacks_system(["Command not found"])
                 return False
 
             if len(command) == 2:
@@ -617,7 +550,7 @@ class CentralServer:
                         self.show_feedbacks_system(["No rooms connected"])
                         return False
                     if self.__dict__.get(f"room_{room}"):
-                        if int(action) in range(1, 9):
+                        if int(action) in range(1, 10):
                             self.show_feedbacks_system(
                                 ["Valid command, applying..."]
                             )
@@ -640,12 +573,26 @@ class CentralServer:
         return False
 
     def turn_on_buzzer(self):
-        for num_room in range(1, self.rooms_conneteds + 1):
-            self.__dict__[f"room_{num_room}"].apply_action(11)
+        if not self.buzzer:
+            self.buzzer = 1
+            for num_room in self.get_rooms_conneteds():
+                self.__dict__[f"room_{num_room}"].apply_action(
+                    action={"alarm_bell": "on"}
+                )
+        self.show_dashboard()
+        return
 
-    def turn_off_buzzer(self):
-        for num_room in range(1, self.rooms_conneteds + 1):
-            self.__dict__[f"room_{num_room}"].apply_action(12)
+    def turn_on_off_buzzer(self):
+        action = {}
+        if self.buzzer:
+            action = {"alarm_bell": "off"}
+            self.buzzer = 0
+        else:
+            self.buzzer = 1
+            action = {"alarm_bell": "on"}
+        for num_room in self.get_rooms_conneteds():
+            self.__dict__[f"room_{num_room}"].apply_action(action)
+        return True
 
     def watch_alarm_trigger(self):
         trigger_sensors = [
@@ -654,8 +601,10 @@ class CentralServer:
             "door_sensor",
         ]
         while True:
+            if globals.stop_threads:
+                break
             if self.alarm_system:
-                for num_room in range(1, self.rooms_conneteds + 1):
+                for num_room in self.get_rooms_conneteds():
                     for trigger_sensor in trigger_sensors:
                         if (
                             self.__dict__[f"room_{num_room}"]
@@ -680,7 +629,7 @@ class CentralServer:
                                 ]
                             )
             else:
-                for num_room in range(1, self.rooms_conneteds + 1):
+                for num_room in self.get_rooms_conneteds():
                     if (
                         self.__dict__[f"room_{num_room}"]
                         .__dict__["smoke_sensor"]
@@ -702,7 +651,7 @@ class CentralServer:
                                 f"smoke_sensor in room {num_room}",
                             ]
                         )
-            time.sleep(0.5)
+            time.sleep(1)
 
     def show_feedbacks_system(self, messages=None) -> None:
         self.create_screen_feedbacks_system()
@@ -721,23 +670,66 @@ class CentralServer:
         self.pad_feedbacks_system.refresh(
             0, 0, *self.pad_feedbacks_system_position
         )
-        globals.stdscr_global.refresh()
+        globals.stdscr_global.noutrefresh()
+        curses.doupdate()
+
+    def listen_connections(self):
+        while True:
+            if globals.stop_threads:
+                break
+            self.server.listen(socket.INADDR_ANY)
+            try:
+                client_socket, client_address = self.server.accept()
+                self.show_feedbacks_system(
+                    [
+                        "New room connected",
+                        "Waiting for configuration...",
+                    ]
+                )
+                time.sleep(1)
+            except OSError:
+                pass
+                # break
+            else:
+                self.rooms_conneteds += 1
+
+                while True:
+                    data = client_socket.recv(2048)  # the client send a json
+                    if data:
+                        break
+                configure_file = json.loads(data.decode("utf-8"))
+                room_name = configure_file.get("data").get("name")
+                devices = configure_file.get("data").get("devices")
+                room = Room(
+                    room_name,
+                    client_address,
+                    client_socket,
+                    **devices,
+                )
+                self.add_room(room)
+            if self.rooms_conneteds == 4:
+                break
+            time.sleep(3)
 
     def run(self):
         globals.stdscr_global.clear()
         globals.stdscr_global.refresh()
+        listen_connections_thread = threading.Thread(
+            target=self.listen_connections
+        )
         text_box_thread = threading.Thread(target=self.show_text_box)
-        text_box_thread.start()
+        dashboard_thread = threading.Thread(target=self.update_rooms_info)
         watch_alarm_trigger_thread = threading.Thread(
             target=self.watch_alarm_trigger
         )
+        listen_connections_thread.start()
+        text_box_thread.start()
+        dashboard_thread.start()
         watch_alarm_trigger_thread.start()
         self.show_dashboard()
         self.show_instructions()
         self.show_feedbacks_system()
         globals.stdscr_global.refresh()
-        # globals.stdscr_global.noutrefresh()
-        # curses.doupdate()
         text_box_thread.join()
 
 

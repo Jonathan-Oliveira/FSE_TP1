@@ -10,6 +10,28 @@ Este trabalho tem por objetivo a criação de um sistema distribuído de automa�
 
 **Demais informações no repositório do enunciado:** [enunciado](https://gitlab.com/fse_fga/trabalhos-2022_2/trabalho-1-2022-2)
 
+## 2. Configuração
+
+*OBS:** È necessário utilizar python 3.9 ou superior
+
+Primeira coisa a se fazer é clonar o repositório:
+
+```bash
+git clone https://github.com/Jonathan-Oliveira/FSE_TP1.git
+```
+
+Entrar na pasta do projeto:
+
+```bash
+cd FSE_TP1
+```
+
+E instalar as dependências:
+
+```bash
+pip install -r requirements.txt
+```
+
 ## 2. Como executar
 
 ### 2.1. Servidor
@@ -30,4 +52,4 @@ python client/client.py
 
 ## 3. Comandos
 
-Na tela do servidor há instruções de como utilizar o programa. Para executar um comando para o servidor, basta digitar o comando e apertar enter. Para executar o comando para uma sala específica, basta digitar o  número da sala e o número identificador do comando separados por um espaço. Por exemplo, para acionar a lâmpada 1 da sala 1, basta digitar `1 1`.
+Na tela do servidor há instruções de como utilizar o programa. Para executar um comando para todas as salas, basta digitar o comando e apertar enter. Para executar o comando para uma sala específica, basta digitar o  número da sala e o número identificador do comando separados por um espaço. Por exemplo, para acionar a lâmpada 1 da sala 1, basta digitar `1 1`. 

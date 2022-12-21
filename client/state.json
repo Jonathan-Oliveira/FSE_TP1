@@ -1,18 +1,2 @@
 {
-  "temperature_humidity_sensor": 
-    {
-      "temperature": 23.5,
-      "humidity": 50.5
-    }
-  ,
-  "alarm_bell": 0,
-  "air_conditioner": 0,
-  "multimedia_projector": 0,
-  "lamp2": 0,
-  "lamp1": 0,
-  "door_sensor": 0,
-  "window_sensor": 0,
-  "smoke_sensor": 0,
-  "presence_sensor": 0,
-  "people_count": 0
 }

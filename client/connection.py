@@ -1,6 +1,7 @@
 import json
 import threading
 import time
+import globals
 
 
 class ReceiveMessage(threading.Thread):
@@ -10,11 +11,13 @@ class ReceiveMessage(threading.Thread):
 
     def run(self):
         while True:
+            if globals.stop_threads:
+                break
             in_data = self.client.recv(1024)
             if in_data:
                 print("From Server :", in_data.decode("utf-8"))
                 globals.queueCommands.put(json.loads(in_data.decode("utf-8")))
-            time.sleep(0.20)
+            time.sleep(0.5)
 
 
 class ApplyCommand(threading.Thread):
@@ -24,6 +27,8 @@ class ApplyCommand(threading.Thread):
 
     def run(self):
         while True:
+            if globals.stop_threads:
+                break
             if not globals.queueCommands.empty():
                 command = globals.queueCommands.get().get("data")
                 try:
@@ -46,7 +51,8 @@ class ApplyCommand(threading.Thread):
                             "status": "accepted",
                         }
                     )
-            time.sleep(0.20)
+                self.interface.save_state()
+            time.sleep(0.5)
 
 
 class SeeInputs(threading.Thread):
@@ -61,6 +67,8 @@ class SeeInputs(threading.Thread):
         )
 
         while True:
+            if globals.stop_threads:
+                break
             # Check if a person is detected
             if (
                 self.interface.__dict__.get(self.device.tag).get_tag()
@@ -103,6 +111,7 @@ class SeeInputs(threading.Thread):
                         }
                     )
                     self.interface.__dict__.get(self.device.tag).set_value(1)
+
                 elif (
                     self.interface.__dict__.get(self.device.tag).get_input()
                     == 0
@@ -112,6 +121,8 @@ class SeeInputs(threading.Thread):
                     == 1
                 ):
                     self.interface.__dict__.get(self.device.tag).set_value(0)
+                time.sleep(0.05)
+                continue
             else:
                 value = self.interface.__dict__.get(
                     self.device.tag
@@ -140,7 +151,11 @@ class SeeInputs(threading.Thread):
                                 {
                                     "type": "push",
                                     "message": "ok",
-                                    "data": self.interface.get_lamps_status(),
+                                    "data": {
+                                        "lamp1": 1,
+                                        "lamp2": 1,
+                                        "presence_sensor": 1,
+                                    },
                                 }
                             )
                             time.sleep(15)
@@ -149,7 +164,10 @@ class SeeInputs(threading.Thread):
                                 {
                                     "type": "push",
                                     "message": "ok",
-                                    "data": self.interface.get_lamps_status(),
+                                    "data": {
+                                        "lamp1": 0,
+                                        "lamp2": 0,
+                                    },
                                 }
                             )
                             continue
@@ -178,7 +196,7 @@ class SeeInputs(threading.Thread):
             if self.interface.__dict__.get(self.device.tag).kind == "dth22":
                 time.sleep(1.8)
             else:
-                time.sleep(0.25)
+                time.sleep(1)
 
 
 class SendMessage(threading.Thread):
@@ -188,9 +206,17 @@ class SendMessage(threading.Thread):
 
     def run(self):
         while True:
-            if not globals.queueMessages.empty():
-                message = globals.queueMessages.get()
-                self.client.sendall(
-                    bytes(json.dumps(message), encoding="utf-8")
-                )
-            time.sleep(0.20)
+            if globals.stop_threads:
+                break
+            try:
+                if not globals.queueMessages.empty():
+                    message = globals.queueMessages.get()
+                    self.client.sendall(
+                        bytes(json.dumps(message), encoding="utf-8")
+                    )
+            except BrokenPipeError:
+                globals.queueMessages.put(message)
+                print("Client disconnected")
+                break
+                globals.stop_threads = True
+            time.sleep(0.5)

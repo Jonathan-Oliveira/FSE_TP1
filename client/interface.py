@@ -1,7 +1,6 @@
 import RPi.GPIO as GPIO
 import board
 import adafruit_dht
-from typing import Union
 import json
 import globals
 
@@ -69,17 +68,6 @@ class Device:
     def __repr__(self):
         return f"Device({self.name}, {self.pin}, {self.value}, {self.tag}, {self.kind})"
 
-    def watch_change(self, callback):
-        if self.kind == "dth22" or self.kind == GPIO.OUT:
-            return
-        GPIO.add_event_detect(
-            self.pin, GPIO.BOTH, callback=self.callback, bouncetime=100
-        )
-
-    def callback(self, channel):
-        self.value = GPIO.input(channel)
-        print(f"callback: {self.name} {self.value}")
-
 
 class ControlGPIO:
     def __init__(self, **kwargs):
@@ -110,26 +98,23 @@ class ControlGPIO:
             device.turn_off()
 
     def get_lamps_values(self):
-        lamps = {}
-        for device in self.__dict__.values():
-            if type(device) != Device:
-                continue
-            if device.name.startswith("lamp"):
-                lamps[device.tag] = device.get_value()
-        return lamps
+        return {
+            "lamp1": self.lamp1.get_value(),
+            "lamp2": self.lamp2.get_value(),
+        }
 
     def turn_all_lamp_off(self):
         for device in self.__dict__.values():
             if type(device) != Device:
                 continue
-            if device.name.startswith("lamp"):
+            if device.tag.startswith("lamp"):
                 device.turn_off()
 
     def turn_all_lamp_on(self):
         for device in self.__dict__.values():
             if type(device) != Device:
                 continue
-            if device.name.startswith("lamp"):
+            if device.tag.startswith("lamp"):
                 device.turn_on()
 
     def get_device(self, device: str):
@@ -154,9 +139,9 @@ class ControlGPIO:
             getattr(self, device).turn_on() if action == "on" else getattr(
                 self, device
             ).turn_off()
+        self.save_state()
 
     def save_state(self):
-        # Save state each device in file state.json
         data_to_save = {}
         for device in self.__dict__.values():
             if type(device) != Device:
@@ -167,20 +152,21 @@ class ControlGPIO:
         with open("client/state.json", "w") as file:
             json.dump(data_to_save, file)
 
+    def load_state(self):
+        state = self.get_state()
+        if not state:
+            return
+        for device in self.__dict__.values():
+            if type(device) != Device:
+                continue
+            self.__dict__[device.tag].set_value(state[device.tag])
+        self.set_alarm_system(state["alarm_system"])
+        globals.people_count._value = state["people_count"]
+
     def get_state(self):
         with open("client/state.json", "r") as file:
             json_data = file.read()
         return json.loads(json_data)
-
-    def set_state(self, state):
-        for device in self.__dict__.values():
-            if device.tag in state:
-                if type(state.get(device.tag)) == bool:
-                    device.turn_on() if state.get(
-                        device.tag
-                    ) else device.turn_off()
-                else:
-                    device.value = state.get(device.tag)
 
     def print_all_devices(self):
         for device in self.__dict__.values():

@@ -2,27 +2,61 @@ import json
 import random
 import socket
 import time
+import globals
 
 
 def read_config():
-    config = input("Digite o numero do ambiente:")
-    if config == "1" or config == "3":
-        name_file = "client/config_1_3.json"
-    elif config == "2" or config == "4":
-        name_file = "client/config_2_4.json"
+    number = ""
+    while number not in ["1", "2", "3", "4"]:
+        number = input("Which config do you want to use? (1, 2, 3 or 4)\n")
+        number = number.strip()
+    number = int(number)
+    print(f"Using config {number}")
+    if number in [1, 3]:
+        file_name = "client/config_1_3.json"
+    elif number in [2, 4]:
+        file_name = "client/config_2_4.json"
 
-    with open(name_file, "r") as file:
-        json_data = file.read()
-    return json.loads(json_data)
+    with open(file_name, "r") as file:
+        config = json.load(file)
+    config.update(get_host_ip(number))
+    return config
+
+
+def get_host_ip(num):
+
+    if num == 1:
+        return {
+            "client_ip": "164.41.98.29",
+            "client_port": 10501,
+            "name": "room_1",
+        }
+    elif num == 2:
+        return {
+            "client_ip": "164.41.98.26",
+            "client_port": 10502,
+            "name": "room_2",
+        }
+    elif num == 3:
+        return {
+            "client_ip": "164.41.98.28",
+            "client_port": 10503,
+            "name": "room_3",
+        }
+    elif num == 4:
+        return {
+            "client_ip": "164.41.98.15",
+            "client_port": 10505,
+            "name": "room_4",
+        }
 
 
 def createConection():
-    config = read_config()
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client.bind(
         (
-            config.get("ip_servidor_distribuido"),
-            config.get("porta_servidor_distribuido"),
+            globals.config.get("client_ip"),
+            globals.config.get("client_port"),
         )
     )
     print("Waiting for connection...")
@@ -31,8 +65,8 @@ def createConection():
         try:
             client.connect(
                 (
-                    config.get("ip_servidor_central"),
-                    config.get("porta_servidor_central"),
+                    globals.config.get("server_ip"),
+                    globals.config.get("server_port"),
                 )
             )
             connected = True
@@ -47,9 +81,9 @@ def createConection():
                 {
                     "type": "register",
                     "data": {
-                        "name": config.get("nome"),
+                        "name": globals.config.get("name"),
                         "devices": parse_devices_to_server(
-                            config.get("dispositivos")
+                            globals.config.get("devices")
                         ),
                     },
                 }
